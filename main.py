@@ -1,4 +1,6 @@
+from pymongo.errors import ConnectionFailure
 from rich.console import Console
+from pymongo import MongoClient
 from rich.table import Table
 import datetime
 import requests
@@ -27,6 +29,38 @@ P2P_OPTIONS = {
     "page": 1,
     "rows": 7
 }
+
+MONGO_URI = "mongodb://localhost:27017/"
+MONGO_COLLECTION_NAME = "metrics_summary"
+MONGO_DB_NAME = "binance_p2p"
+
+def connect_to_mongo(uri, db_name, collection_name):
+    """Conecta a MongoDB y devuelve el objeto de la colección."""
+    try:
+        client = MongoClient(uri, serverSelectionTimeoutMS=5000)
+        client.admin.command('ismaster')
+        db = client[db_name]
+
+        return db[collection_name]
+    except ConnectionFailure as e:
+        console = Console()
+        console.print(f"[bold red]Error al conectar a MongoDB: {e}[/bold red]")
+
+        return None
+
+def store_metrics_in_mongo(collection, metrics_doc):
+    """Almacena un único documento de métricas en MongoDB."""
+    if collection is None or not metrics_doc:
+        return False
+    try:
+        result = collection.insert_one(metrics_doc)
+
+        return result.acknowledged
+    except Exception as e:
+        console = Console()
+        console.print(f"[bold red]Error al insertar métricas en MongoDB: {e}[/bold red]")
+
+        return False
 
 def get_first_page_ads(trade_type: str, trans_amount: int):
     """
@@ -156,11 +190,45 @@ def fetch_and_display_metrics():
     Función que encapsula una ejecución completa de la obtención y muestra de datos.
     """
     console = Console()
-    console.print(f"[bold green]Ejecutando a las {datetime.datetime.now().strftime('%H:%M:%S')}...[/bold green]")
+    fetch_timestamp = datetime.datetime.now(datetime.timezone.utc)
+    console.print(f"[bold green]Ejecutando a las {datetime.datetime.now().strftime('%H:%M:%S')} (UTC: {fetch_timestamp.strftime('%H:%M:%S')})...[/bold green]")
 
     buy_ads = get_first_page_ads(trade_type="BUY", trans_amount=32000)
     sell_ads = get_first_page_ads(trade_type="SELL", trans_amount=3200)
-    
+
+    if buy_ads and sell_ads:
+        buy_prices = [float(ad['adv']['price']) for ad in buy_ads]
+        buy_quantities = [float(ad['adv']['tradableQuantity']) for ad in buy_ads]
+        sell_prices = [float(ad['adv']['price']) for ad in sell_ads]
+        sell_quantities = [float(ad['adv']['tradableQuantity']) for ad in sell_ads]
+        
+        metrics_to_store = {
+            "timestamp": fetch_timestamp,
+            "buy_side": {
+                "price_median": calc_median(buy_prices),
+                "price_min": min(buy_prices),
+                "price_max": max(buy_prices),
+                "quantity_median": calc_median(buy_quantities),
+                "volume_total": sum(buy_quantities)
+            },
+            "sell_side": {
+                "price_median": calc_median(sell_prices),
+                "price_min": min(sell_prices),
+                "price_max": max(sell_prices),
+                "quantity_median": calc_median(sell_quantities),
+                "volume_total": sum(sell_quantities)
+            },
+            "diff": {
+                "price_spread_percent": calc_diff(calc_median(buy_prices), calc_median(sell_prices)),
+                "volume_percent": calc_diff(sum(buy_quantities), sum(sell_quantities))
+            }
+        }
+
+        collection = connect_to_mongo(MONGO_URI, MONGO_DB_NAME, MONGO_COLLECTION_NAME)
+
+        if store_metrics_in_mongo(collection, metrics_to_store):
+            console.print("[blue]Resumen de métricas guardado en MongoDB.[/blue]")
+
     process_and_display_metrics(buy_ads, sell_ads)
 
 def main():
