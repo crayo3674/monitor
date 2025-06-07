@@ -1,3 +1,5 @@
+from rich.console import Console
+from rich.table import Table
 import requests
 import time
 import math
@@ -20,7 +22,7 @@ P2P_OPTIONS = {
     "shieldMerchantAds": False,
     "publisherType": None,
     "page": 1,
-    "rows": 20
+    "rows": 7
 }
 
 def get_first_page_ads(trade_type: str, trans_amount: int):
@@ -99,43 +101,55 @@ def process_and_display_metrics(buy_ads: list, sell_ads: list):
     buy_prices = [float(ad['adv']['price']) for ad in buy_ads]
     buy_quantities = [float(ad['adv']['tradableQuantity']) for ad in buy_ads]
 
-    total_sell_quantity = sum(sell_quantities)
-    total_buy_quantity = sum(buy_quantities)
+    console = Console()
     
-    median_sell_price = calc_median(sell_prices)
-    median_buy_price = calc_median(buy_prices)
+    table = Table(
+        title=f"\nMétricas P2P Binance | USDT/VES | {', '.join(P2P_OPTIONS['payTypes'])}",
+        title_style="bold magenta",
+        header_style="bold blue"
+    )
 
-    volume_diff = calc_diff(total_buy_quantity, total_sell_quantity)
-    price_diff = calc_diff(median_buy_price, median_sell_price)
-    
-    print("\n" + "="*60)
-    print(f"   Métricas P2P para USDT/VES")
-    print("="*60)
-    
-    print("-"*60)
-    
-    print(f"Precio Promedio (Mediana):")
-    print(f"  - COMPRA: {median_buy_price:,.2f} VES")
-    print(f"  - VENTA:  {median_sell_price:,.2f} VES\n")
-    
-    print(f"Precio Mínimo:")
-    print(f"  - COMPRA: {min(buy_prices):,.2f} VES")
-    print(f"  - VENTA:  {min(sell_prices):,.2f} VES\n")
+    table.add_column("MÉTRICA", justify="left", style="cyan")
+    table.add_column("COMPRA", justify="center", style="green")
+    table.add_column("VENTA", justify="center", style="red")
 
-    print(f"Precio Máximo:")
-    print(f"  - COMPRA: {max(buy_prices):,.2f} VES")
-    print(f"  - VENTA:  {max(sell_prices):,.2f} VES\n")
+    table.add_row(
+        "Precio Promedio (Mediana)",
+        f"{calc_median(buy_prices):,.2f} VES",
+        f"{calc_median(sell_prices):,.2f} VES"
+    )
+    table.add_row(
+        "Precio Mínimo",
+        f"{min(buy_prices):,.2f} VES",
+        f"{min(sell_prices):,.2f} VES"
+    )
+    table.add_row(
+        "Precio Máximo",
+        f"{max(buy_prices):,.2f} VES",
+        f"{max(sell_prices):,.2f} VES"
+    )
+    table.add_row(
+        "Cantidad Promedio (Mediana)",
+        f"{calc_median(buy_quantities):,.2f} USDT",
+        f"{calc_median(sell_quantities):,.2f} USDT",
+        end_section=True
+    )
+    table.add_row(
+        "Volumen Total (Suma)",
+        f"{sum(buy_quantities):,.2f} USDT",
+        f"{sum(sell_quantities):,.2f} USDT"
+    )
+    
+    console.print(table)
 
-    print(f"Volumen Total Disponible (USDT):")
-    print(f"  - COMPRA: {total_buy_quantity:,.2f}")
-    print(f"  - VENTA:  {total_sell_quantity:,.2f}\n")
-
-    print(f"Diferencia de Precio (Spread): {price_diff:.2f}%")
-    print(f"Diferencia de Volumen (Compra vs Venta): {volume_diff:.2f}%")
-    print("="*60)
+    price_diff = calc_diff(calc_median(buy_prices), calc_median(sell_prices))
+    volume_diff = calc_diff(sum(buy_quantities), sum(sell_quantities))
+    
+    console.print(f"\n[bold yellow]Diferencia de Precio (Spread):[/bold yellow] {price_diff:.2f}%")
+    console.print(f"[bold yellow]Diferencia de Volumen (Compra vs Venta):[/bold yellow] {volume_diff:.2f}%\n")
 
 def main():
-    print("Iniciando la obtención de datos de Binance P2P...")
+    print("\nIniciando la obtención de datos de Binance P2P...")
 
     buy_ads = get_first_page_ads(trade_type="BUY", trans_amount=32000)
     sell_ads = get_first_page_ads(trade_type="SELL", trans_amount=3200)
