@@ -1,5 +1,6 @@
 from rich.console import Console
 from rich.table import Table
+import datetime
 import requests
 import time
 import math
@@ -7,6 +8,8 @@ import sys
 
 BASE_URL = "https://p2p.binance.com"
 SEARCH_URL = "/bapi/c2c/v2/friendly/c2c/adv/search"
+
+INTERVALO_MINUTOS = 10
 
 HEADERS = {
     'Content-Type': 'application/json',
@@ -102,7 +105,7 @@ def process_and_display_metrics(buy_ads: list, sell_ads: list):
     buy_quantities = [float(ad['adv']['tradableQuantity']) for ad in buy_ads]
 
     console = Console()
-    
+
     table = Table(
         title=f"\nMétricas P2P Binance | USDT/VES | {', '.join(P2P_OPTIONS['payTypes'])}",
         title_style="bold magenta",
@@ -148,13 +151,43 @@ def process_and_display_metrics(buy_ads: list, sell_ads: list):
     console.print(f"\n[bold yellow]Diferencia de Precio (Spread):[/bold yellow] {price_diff:.2f}%")
     console.print(f"[bold yellow]Diferencia de Volumen (Compra vs Venta):[/bold yellow] {volume_diff:.2f}%\n")
 
-def main():
-    print("\nIniciando la obtención de datos de Binance P2P...")
+def fetch_and_display_metrics():
+    """
+    Función que encapsula una ejecución completa de la obtención y muestra de datos.
+    """
+    console = Console()
+    console.print(f"[bold green]Ejecutando a las {datetime.datetime.now().strftime('%H:%M:%S')}...[/bold green]")
 
     buy_ads = get_first_page_ads(trade_type="BUY", trans_amount=32000)
     sell_ads = get_first_page_ads(trade_type="SELL", trans_amount=3200)
     
     process_and_display_metrics(buy_ads, sell_ads)
+
+def main():
+    """
+    Función principal que actúa como planificador (scheduler).
+    """
+    console = Console()
+    console.print("[bold cyan]Iniciando el bot de métricas P2P. Se ejecutará cada 10 minutos en punto.[/bold cyan]")
+    
+    while True:
+        ahora = datetime.datetime.now()
+        
+        minutos_en_segundos = ahora.minute * 60 + ahora.second
+        segundos_desde_ultimo_intervalo = minutos_en_segundos % (INTERVALO_MINUTOS * 60)
+        
+        segundos_para_esperar = (INTERVALO_MINUTOS * 60) - segundos_desde_ultimo_intervalo
+        
+        proxima_ejecucion = ahora + datetime.timedelta(seconds=segundos_para_esperar)
+        
+        console.print(f"Próxima ejecución a las: [bold yellow]{proxima_ejecucion.strftime('%H:%M:%S')}[/bold yellow]. Esperando {segundos_para_esperar:.0f} segundos...")
+        
+        time.sleep(segundos_para_esperar)
+        try:
+            fetch_and_display_metrics()
+        except Exception as e:
+            console.print(f"[bold red]Ocurrió un error inesperado durante la ejecución: {e}[/bold red]")
+            console.print("[bold red]El scheduler continuará. Reintentando en el próximo intervalo.[/bold red]")
 
 if __name__ == "__main__":
     main()
