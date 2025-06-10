@@ -5,6 +5,7 @@ import datetime
 import requests
 import time
 import math
+import pytz
 import sys
 
 BASE_URL = "https://p2p.binance.com"
@@ -104,7 +105,8 @@ def fetch_and_store_metrics():
     """
     console = Console()
 
-    fetch_timestamp = datetime.datetime.now(datetime.timezone.utc)
+    caracas_tz = pytz.timezone('America/Caracas')
+    fetch_timestamp = datetime.datetime.now(caracas_tz)
     console.print(f"[bold green]Ejecutando a las {datetime.datetime.now().strftime('%H:%M:%S')}...[/bold green]")
 
     buy_ads = get_first_page_ads(trade_type="BUY", trans_amount=32000)
